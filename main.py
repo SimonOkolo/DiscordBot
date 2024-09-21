@@ -5,6 +5,10 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
+import re
+import requests
+import json
+from webdriver_manager.chrome import ChromeDriverManager
 
 # Set up the Chrome browser
 options = webdriver.ChromeOptions()
@@ -12,9 +16,16 @@ options.add_argument('--no-sandbox')
 options.add_argument('--disable-dev-shm-usage')
 options.add_argument('--disable-infobars')  # Disable pop-ups and infobars
 options.add_argument('--start-maximized')  # Start maximized for visibility
+#options.add_argument('--headless')
 
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
+character_personality = """
+Your name is aaliya and youre a 17 year old girl,
+You talk in single sentences messages as if typing and use english slang with no punctuations and no hashtags, no capitalisation, emojis are alright sometimes,
+You never use actions like *walks over* when talking but you stay focused on the conversation. You are caring and nice to everyone.
+You never fall for sarcasm and jokes, seeing through lies.
+"""
 # Login function
 def discord_login(email, password):
     driver.get("https://discord.com/login")
@@ -39,6 +50,8 @@ def discord_login(email, password):
 
     time.sleep(5)  # Wait for Discord to log in
 
+def sanitize_message(message):
+    return re.sub(r'[^\u0000-\uFFFF]', '', message)
 
 # Function to send a message in a group chat
 def send_test_message(group_chat_name, message):
@@ -95,31 +108,75 @@ def monitor_messages():
 # Send a message in response to a mention
 def send_message(message):
     try:
+        # Sanitize the message to remove non-BMP characters
+        sanitized_message = sanitize_message(message)
+        
         message_box = WebDriverWait(driver, 5).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "div[class*='markup_f8f345 editor_a552a6 slateTextArea_e52116 fontSize16Padding_d0696b']"))
         )
         message_box.click()
 
-        #Type the message
-        message_box.send_keys(message)
+        # Type the sanitized message
+        message_box.send_keys(sanitized_message)
 
         # Simulate pressing Enter to send the message
         message_box.send_keys("\n")
         message_box.send_keys("\n")
+
     except Exception as e:
         print(f"Error while sending message: {e}")
 
 
-# Generate an AI response (dummy function for now)
+# Generate a response using Ollama API
 def generate_response(latest_message):
-    message_box = WebDriverWait(driver, 5).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "div[class*='markup_f8f345 editor_a552a6 slateTextArea_e52116 fontSize16Padding_d0696b']"))
-    )
-    if latest_message == "@★❣aaliyah❣★":
-            message_box.send_keys("if this is thomas you can fucking kys")
-            message_box.send_keys("\n")
+    try:
+        # Define the Ollama API endpoint and payload
+        ollama_url = "http://localhost:11434/api/generate"
 
-    return f"Responding to: {latest_message}"
+        prompt = f"{character_personality}\nRespond to this message: {latest_message}"
+
+        payload = {
+            "model": "mistral",  # Or "llama2-chat"
+            "prompt": prompt
+        }
+
+        # Send request to Ollama
+        response = requests.post(ollama_url, json=payload, stream=True)
+
+        # Check if the request was successful
+        if response.status_code != 200:
+            print(f"API Request failed with status code: {response.status_code}")
+            return "Sorry, I couldn't generate a response."
+
+        # Initialize an empty string to collect responses
+        full_response = ""
+
+        # Stream and aggregate the response parts until the "done" flag is set
+        for line in response.iter_lines():
+            if line:
+                # Parse each line of the streamed response
+                try:
+                    line_data = json.loads(line)
+                    if 'response' in line_data:
+                        full_response += line_data['response']
+
+                    # Check if the response is done
+                    if line_data.get('done', False):
+                        break
+                except json.JSONDecodeError as e:
+                    print(f"JSON parsing error: {e}")
+                    return "Sorry, I couldn't understand the AI's response."
+
+        # Return the full aggregated response
+        return full_response.strip()
+
+    except requests.exceptions.RequestException as e:
+        print(f"Request error: {e}")
+        return "Sorry, there was an issue communicating with the AI."
+
+    except json.JSONDecodeError as e:
+        print(f"JSON parsing error: {e}")
+        return "Sorry, I couldn't understand the AI's response."
 
 
 if __name__ == "__main__":
