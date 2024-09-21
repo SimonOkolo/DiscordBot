@@ -10,43 +10,62 @@ import requests
 import json
 from webdriver_manager.chrome import ChromeDriverManager
 
-# Set up the Chrome browser
+# Set up the Chrome browser with an existing profile
 options = webdriver.ChromeOptions()
+
+# Use an existing user profile path
+profile_path = "/home/simon/.config/google-chrome/'Profile 1'"  # Update this to your actual profile path
+options.add_argument(f"user-data-dir={profile_path}")
+
 options.add_argument('--no-sandbox')
 options.add_argument('--disable-dev-shm-usage')
-options.add_argument('--disable-infobars')  # Disable pop-ups and infobars
-options.add_argument('--start-maximized')  # Start maximized for visibility
-#options.add_argument('--headless')
+options.add_argument('--disable-infobars')
+options.add_argument('--start-maximized')
 
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
 character_personality = """
-Your name is aaliya and youre a 17 year old girl,
-You talk in single sentences messages as if typing and use english slang with no punctuations and no hashtags, no capitalisation, emojis are alright sometimes,
-You never use actions like *walks over* when talking but you stay focused on the conversation. You are caring and nice to everyone.
-You never fall for sarcasm and jokes, seeing through lies.
+Your name is aaliyah and youre a 17 year old girl in collage in england, London,
+You weigh, 53kg (you dont like talking about weight) and youre 5 foot 3.
+You enjoy wearing mostly black clothing since youre kinda emo.
+
+You talk in single sentences messages as if typing and use a little slang, with no punctuation, no hashtags or no capitalisation at all and you dont use "Aaliyah:" or "@Aaliyah" while talking.
+You never use actions like *walks over* when talking but you stay focused on the conversation. You are kinda emo and reserved but you still engage in conversation.
+You never lie about things you dont know. sometimes you like to violate friends but its all banter. You arent afraid to ask when something makes so sense.
+When given simple questions, you just reply yes or no if it doesnt need explanation. You arnt scared to swear.
+
+mustafa is a guy. he is your boyfriend whome you love very dearly. you only love him
+simon is a guy. he is your friend and is a programmer whose always making something
+thomas is a guy, he is the person you hate the most but is the best at rainbow six siege
+david is a guy, he is your friend and is horrible at rainbow six siege and valorant
+raffi is a guy, he is a friend and is super black guy that reads "tower of god" every second of the day, every time hes not, hes masturbating.
+zia is a guy, he is as a friend who fat as fuck and is not good at any game and always wants to go abroad but nobody in the group wants to go
 """
+
+user_memory = {}
+
 # Login function
 def discord_login(email, password):
-    driver.get("https://discord.com/login")
+    driver.get("https://discord.com/channels/@me")
 
-    # Wait until the email input field is visible
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "email")))
+    if False:
+        # Wait until the email input field is visible
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "email")))
 
-    # Fill in the email
-    email_input = driver.find_element(By.NAME, "email")
-    email_input.send_keys(email)
+        # Fill in the email
+        email_input = driver.find_element(By.NAME, "email")
+        email_input.send_keys(email)
 
-    # Wait until the password input field is visible
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "password")))
+        # Wait until the password input field is visible
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "password")))
 
-    # Fill in the password
-    password_input = driver.find_element(By.NAME, "password")
-    password_input.send_keys(password)
+        # Fill in the password
+        password_input = driver.find_element(By.NAME, "password")
+        password_input.send_keys(password)
 
-    # Wait until the login button is clickable
-    login_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']")))
-    login_button.click()
+        # Wait until the login button is clickable
+        login_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']")))
+        login_button.click()
 
     time.sleep(5)  # Wait for Discord to log in
 
@@ -79,26 +98,39 @@ def send_test_message(group_chat_name, message):
 
 
 # Monitor messages in the chat (if required)
+def get_username_and_message():
+    try:
+        # Locate the latest message and its author
+        message_element = driver.find_elements(By.CSS_SELECTOR, "div[class*='messageContent']")[-1]
+        username_element = driver.find_elements(By.CSS_SELECTOR, "span[class*='username']")[-1]
+        
+        latest_message = message_element.text
+        username = username_element.text
+
+        # Return both the message and the username
+        return username, latest_message
+    except Exception as e:
+        print(f"Error while extracting username and message: {e}")
+        return None, None
+
+# Monitor messages and track user interactions
 def monitor_messages():
     last_message = ""
 
     while True:
         try:
-            # Get the list of messages (You may need to adjust this CSS selector)
-            messages = driver.find_elements(By.CSS_SELECTOR, "div[class*='messageContent']")
+            # Get the username and latest message
+            username, latest_message = get_username_and_message()
 
-            # If there are messages, get the latest one
-            if messages:
-                latest_message = messages[-1].text
-
-                # If the latest message is new (not the same as the last message), process it
+            if username and latest_message:
+                # Check if the latest message is new (not the same as the last message)
                 if latest_message != last_message:
-                    print(f"New message detected: {latest_message}")
+                    print(f"New message detected from {username}: {latest_message}")
                     last_message = latest_message
 
-                    # Check if the bot's username is mentioned
-                    if "@★❣aaliyah❣★" in latest_message:
-                        response = generate_response(latest_message)
+                    # Check if the bot's username is mentioned and if the message is not from itself
+                    if "@Aaliyah" in latest_message and username != "Aaliyah":
+                        response = generate_response(username, latest_message)
                         send_message(response)
 
             time.sleep(2)  # Check every 2 seconds
@@ -117,6 +149,7 @@ def send_message(message):
         message_box.click()
 
         # Type the sanitized message
+        print(user_memory)
         message_box.send_keys(sanitized_message)
 
         # Simulate pressing Enter to send the message
@@ -128,12 +161,24 @@ def send_message(message):
 
 
 # Generate a response using Ollama API
-def generate_response(latest_message):
+# Generate a response using Ollama API with character personality and memory
+def generate_response(username, latest_message):
     try:
+        # Initialize or update user memory
+        if username not in user_memory:
+            user_memory[username] = []
+
+        # Add the latest message to the user's memory
+        user_memory[username].append(latest_message)
+
         # Define the Ollama API endpoint and payload
         ollama_url = "http://localhost:11434/api/generate"
+        
+        # Include memory of previous messages for the user
+        user_history = " ".join(user_memory[username][-5:])  # Use the last 5 messages for context
 
-        prompt = f"{character_personality}\nRespond to this message: {latest_message}"
+        # The prompt includes both the character's personality, the user's name, and the conversation history
+        prompt = f"{character_personality}\nYou are responding to {username}. Here is the conversation history: {user_history}\nRespond to this message: {latest_message}"
 
         payload = {
             "model": "mistral",  # Or "llama2-chat"
@@ -182,17 +227,15 @@ def generate_response(latest_message):
 if __name__ == "__main__":
 
     # Log into Discord with your email and password
-    discord_login("jordanbennett.7158@gmail.com", "CEg00gle75")
+    discord_login("jp.1956131@gmail.com", "CEg00gle75")
 
     # Wait for a few seconds to ensure the dashboard is fully loaded
     time.sleep(5)
 
     # Send a test message to a specific group chat
-    send_test_message("Seige diamond 1 nigel farage", "active")
+    send_test_message("Seige diamond 1 nigel farage", "yo im back")
 
     monitor_messages()
 
 #TO DO
-#username specific responses
-#ollama ai api implementation
     #large scale memory using
