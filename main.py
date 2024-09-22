@@ -4,11 +4,40 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+import sqlite3
 import time
 import re
 import requests
 import json
-from webdriver_manager.chrome import ChromeDriverManager
+
+def init_memory_db():
+    conn = sqlite3.connect('ai_memory.db')
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS memory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT,
+            user_message TEXT,
+            bot_response TEXT,
+            timestamp REAL
+        )
+    ''')
+    conn.commit()
+    return conn
+
+# Save memory to the database
+def save_memory(conn, username, user_message, bot_response):
+    c = conn.cursor()
+    c.execute('INSERT INTO memory (username, user_message, bot_response, timestamp) VALUES (?, ?, ?, ?)',
+              (username, user_message, bot_response, time.time()))
+    conn.commit()
+
+# Load memory from the database (limit by the most recent interactions)
+def load_memory(conn, username, limit=5):
+    c = conn.cursor()
+    c.execute('SELECT user_message, bot_response FROM memory WHERE username = ? ORDER BY timestamp DESC LIMIT ?',
+              (username, limit))
+    return c.fetchall()
 
 # Set up the Chrome browser with an existing profile
 options = webdriver.ChromeOptions()
@@ -40,6 +69,7 @@ thomas is a guy, he is the person you hate the most but is the best at rainbow s
 david is a guy, he is your friend and is horrible at rainbow six siege and valorant
 raffi is a guy, he is a friend and is super black guy that reads "tower of god" every second of the day, every time hes not, hes masturbating.
 zia is a guy, he is as a friend who fat as fuck and is not good at any game and always wants to go abroad but nobody in the group wants to go
+reece is a guy, he is a skibidi ohio fanum taxer who likes minors, despite this, he is the best at valorant and he attracts e-girls.
 """
 
 user_memory = {}
@@ -114,7 +144,7 @@ def get_username_and_message():
         return None, None
 
 # Monitor messages and track user interactions
-def monitor_messages():
+def monitor_messages(conn):
     last_message = ""
 
     while True:
@@ -130,7 +160,7 @@ def monitor_messages():
 
                     # Check if the bot's username is mentioned and if the message is not from itself
                     if "@Aaliyah" in latest_message and username != "Aaliyah":
-                        response = generate_response(username, latest_message)
+                        response = generate_response(conn, username, latest_message)
                         send_message(response)
 
             time.sleep(2)  # Check every 2 seconds
@@ -162,23 +192,22 @@ def send_message(message):
 
 # Generate a response using Ollama API
 # Generate a response using Ollama API with character personality and memory
-def generate_response(username, latest_message):
+# Generate a response using Ollama API with character personality and memory
+def generate_response(conn, username, latest_message):
     try:
-        # Initialize or update user memory
-        if username not in user_memory:
-            user_memory[username] = []
+        # Load the last 5 interactions from memory
+        conversation_history = load_memory(conn, username, limit=5)
 
-        # Add the latest message to the user's memory
-        user_memory[username].append(latest_message)
+        # Prepare the conversation history for the prompt
+        user_history = ""
+        for user_message, bot_response in conversation_history:
+            user_history += f"User: {user_message}\nAaliyah: {bot_response}\n"
 
         # Define the Ollama API endpoint and payload
         ollama_url = "http://localhost:11434/api/generate"
-        
-        # Include memory of previous messages for the user
-        user_history = " ".join(user_memory[username][-5:])  # Use the last 5 messages for context
 
-        # The prompt includes both the character's personality, the user's name, and the conversation history
-        prompt = f"{character_personality}\nYou are responding to {username}. Here is the conversation history: {user_history}\nRespond to this message: {latest_message}"
+        # The prompt includes the character's personality, conversation history, and the new user message
+        prompt = f"{character_personality}\nHere is the recent conversation history with {username}:\n{user_history}User: {latest_message}\nAaliyah:"
 
         payload = {
             "model": "mistral",  # Or "llama2-chat"
@@ -199,7 +228,6 @@ def generate_response(username, latest_message):
         # Stream and aggregate the response parts until the "done" flag is set
         for line in response.iter_lines():
             if line:
-                # Parse each line of the streamed response
                 try:
                     line_data = json.loads(line)
                     if 'response' in line_data:
@@ -212,6 +240,9 @@ def generate_response(username, latest_message):
                     print(f"JSON parsing error: {e}")
                     return "Sorry, I couldn't understand the AI's response."
 
+        # Save the user message and the AI response in memory
+        save_memory(conn, username, latest_message, full_response.strip())
+
         # Return the full aggregated response
         return full_response.strip()
 
@@ -219,12 +250,10 @@ def generate_response(username, latest_message):
         print(f"Request error: {e}")
         return "Sorry, there was an issue communicating with the AI."
 
-    except json.JSONDecodeError as e:
-        print(f"JSON parsing error: {e}")
-        return "Sorry, I couldn't understand the AI's response."
-
 
 if __name__ == "__main__":
+
+    conn = init_memory_db()
 
     # Log into Discord with your email and password
     discord_login("jp.1956131@gmail.com", "CEg00gle75")
@@ -235,7 +264,7 @@ if __name__ == "__main__":
     # Send a test message to a specific group chat
     send_test_message("Seige diamond 1 nigel farage", "yo im back")
 
-    monitor_messages()
+    monitor_messages(conn)
 
 #TO DO
     #large scale memory using
