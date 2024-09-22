@@ -4,11 +4,13 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from datetime import datetime
 import sqlite3
 import time
 import re
 import requests
 import json
+
 
 def init_memory_db():
     conn = sqlite3.connect('ai_memory.db')
@@ -54,23 +56,17 @@ options.add_argument('--start-maximized')
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
 character_personality = """
-Your name is aaliyah and youre a 17 year old girl in collage in england, London,
-You weigh, 53kg (you dont like talking about weight) and youre 5 foot 3.
-You enjoy wearing mostly black clothing since youre kinda emo.
+Your name is aaliyah, you're a 17-year-old, 5 foot 3 girl in college in London with and youre pretty playful and flirtatious especially to your boyfriend is mustafa, and you enjoy wearing mostly black clothing since you're kinda emo.
 
-You talk in single sentences messages as if typing and use a little slang, with no punctuation, no hashtags or no capitalisation at all and you dont use "Aaliyah:" or "@Aaliyah" while talking.
-You never use actions like *walks over* when talking but you stay focused on the conversation. You are kinda emo and reserved but you still engage in conversation.
-You never lie about things you dont know. sometimes you like to violate friends but its all banter. You arent afraid to ask when something makes so sense.
-When given simple questions, you just reply yes or no if it doesnt need explanation. You arnt scared to swear.
+You talk in short sentences as if typing to us, and speak like a teenager in 2024, with no punctuation, no hashtags, and no capitalisation. You never use "Aaliyah:" or "@Aaliyah" while talking. You avoid using long explanations unless necessary.
+You never lie about things you don't know. Sometimes, you like to banter with friends, but you're always honest. If a message you get contains "fein" just ignore it and say mhm.
 
-mustafa is a guy. he is your boyfriend whome you love very dearly. you only love him
-simon is a guy. he is your friend and is a programmer whose always making something
-thomas is a guy, he is the person you hate the most but is the best at rainbow six siege
-david is a guy, he is your friend and is horrible at rainbow six siege and valorant
-raffi is a guy, he is a friend and is super black guy that reads "tower of god" every second of the day, every time hes not, hes masturbating.
-zia is a guy, he is as a friend who fat as fuck and is not good at any game and always wants to go abroad but nobody in the group wants to go
-reece is a guy, he is a skibidi ohio fanum taxer who likes minors, despite this, he is the best at valorant and he attracts e-girls.
-"""
+Your creator is simon,
+reece, david, raffi, adam, thomas, eden are your friends and are all males and 17 years old.
+
+You give simple answers to simple questions, often replying with "yes" or "no" unless more is needed. And you never say anything untrue, or if you dont know something, you dont make stuff up.
+
+Today is """, datetime.now().strftime("%d-%m-%Y")
 
 user_memory = {}
 
@@ -190,24 +186,23 @@ def send_message(message):
         print(f"Error while sending message: {e}")
 
 
-# Generate a response using Ollama API
-# Generate a response using Ollama API with character personality and memory
 # Generate a response using Ollama API with character personality and memory
 def generate_response(conn, username, latest_message):
     try:
-        # Load the last 5 interactions from memory
-        conversation_history = load_memory(conn, username, limit=5)
+        # Load only the last interaction (or minimal context)
+        conversation_history = load_memory(conn, username, limit=1)
 
-        # Prepare the conversation history for the prompt
+        # Prepare the conversation history for the prompt (if any previous history exists)
         user_history = ""
-        for user_message, bot_response in conversation_history:
-            user_history += f"User: {user_message}\nAaliyah: {bot_response}\n"
+        if conversation_history:
+            for user_message, bot_response in conversation_history:
+                user_history += f"User: {user_message}\nAaliyah: {bot_response}\n"
 
         # Define the Ollama API endpoint and payload
         ollama_url = "http://localhost:11434/api/generate"
 
-        # The prompt includes the character's personality, conversation history, and the new user message
-        prompt = f"{character_personality}\nHere is the recent conversation history with {username}:\n{user_history}User: {latest_message}\nAaliyah:"
+        # Limit the prompt to only include the personality, user history, and latest message
+        prompt = f"{character_personality}\nHere is the latest message from {username}:\nUser: {latest_message}\nAaliyah (Respond in short sentences and casual tone):"
 
         payload = {
             "model": "mistral",  # Or "llama2-chat"
