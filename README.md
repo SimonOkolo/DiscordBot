@@ -1,4 +1,7 @@
 
+![](https://imgur.com/a/mcBmh5x.png)
+
+
 # Discord Bot
 
 This python program allows you to use a locally hosted AI (using ollama) to run a real discord account (not a bot account), able to respond to messages when mentioned in the chat.
