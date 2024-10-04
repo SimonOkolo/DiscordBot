@@ -1,5 +1,5 @@
 
-![](https://imgur.com/gallery/discord-custom-logo-mcBmh5x))
+![](https://i.imgur.com/vUHB6ZL.png)
 
 
 # Discord Bot
